@@ -1,0 +1,11 @@
+astropy-healpix>=1.0.3
+edges-analysis>=7.0.0
+edges-cal>=7.0.0
+edges-estimate>=1.3.0
+edges-io>=4.1.7
+edges-pipelines
+jupyter>=1.1.1
+nbconvert>=7.16.4
+papermill>=2.6.0
+pygsdata>=0.2.0
+read-acq>=1.1.0

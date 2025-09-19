@@ -1,0 +1,2 @@
+[console_scripts]
+epipe = edges_pipelines.cli:app
