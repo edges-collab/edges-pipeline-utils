@@ -6,7 +6,6 @@ import jupyter_client
 import papermill as pm
 import toml
 import yaml
-from enum import Enum
 from typing import Optional
 
 k_manager = jupyter_client.kernelspec.KernelSpecManager()
@@ -14,13 +13,11 @@ avail_kernels = k_manager.find_kernel_specs()
 
 here = Path(__file__).parent
 
-NOTEBOOK_DICT = {fl.stem: fl for fl in (here / "notebooks").glob("*.ipynb")}
-
 
 def run_notebook(
     notebook: Path,
     kernel: str,
-    formats: list[str] = ("html",),
+    formats: tuple[str] = (),
     ipynb: bool = True,
     output_dir: Path = Path(),
     convert_args: str = "",
@@ -28,9 +25,8 @@ def run_notebook(
     basename: Optional[str] = None,
     **kwargs
 ):
-    nbfile = NOTEBOOK_DICT[notebook.value]
     if basename is None:
-        basename = notebook.value
+        basename = notebook.stem
 
     if cfgfile is not None:
         if cfgfile.suffix == ".toml":
@@ -45,7 +41,7 @@ def run_notebook(
     else:
         params = {}
 
-    infer = pm.inspect_notebook(nbfile)
+    infer = pm.inspect_notebook(notebook)
     tps = {
         'str': str,
         'int': int,
@@ -71,7 +67,7 @@ def run_notebook(
     output_path = Path(output_dir) / f"{basename}.ipynb"
 
     pm.execute_notebook(
-        str(nbfile),
+        str(notebook),
         output_path=output_path,
         kernel_name=kernel,
         parameters=params,
