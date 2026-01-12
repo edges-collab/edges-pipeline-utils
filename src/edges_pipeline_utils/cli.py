@@ -53,11 +53,10 @@ def get_ydays(
     last_year: int, 
     last_day: int,
     print_index: bool = False,
+    datadir: Path = Path("/data5/edges/data/2014_February_Boolardy/mro/low/")
 ):
     from pathlib import Path
     from datetime import datetime as dt, timedelta
-
-    datadir = Path("/data5/edges/data/2014_February_Boolardy/mro/low/")
     
     first = dt(year=first_year, month=1, day=1) + timedelta(days=first_day-1)
     last = dt(year=last_year, month=1, day=1) + timedelta(days=last_day-1)
@@ -75,6 +74,39 @@ def get_ydays(
                 print(f"{y}-{d:03}")
             index += 1
         day += timedelta(days=1)
+
+
+@app.command()
+def get_ydays_from_list(
+        npz_path: str,
+        print_index: bool = False,
+        including_neighboring_days: bool = True,
+        datadir: Path = Path("/data5/edges/data/EDGES3_data/MRO/mro/ant/")
+):
+    import numpy as np
+
+    data = np.load(npz_path)
+    years = data['year']
+    days = data['day']
+
+    printed = set()
+    index = 0
+
+    for y, d in zip(years, days):
+        day_range = [d - 1, d, d + 1] if including_neighboring_days else [d]
+        for dd in day_range:
+            if not (1 <= dd <= 365):
+                continue
+
+            key = f"{y}_{dd:03}"
+            if key in printed:
+                continue
+
+            files_to_load = sorted((datadir / str(y)).glob(f"{key}_*.acq"))
+            if files_to_load:
+                print(f"{key}")
+                printed.add(key)
+                index += 1
 
 @app.command()
 def gather(files: list[Path], outfile: Path):
