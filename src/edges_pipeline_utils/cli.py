@@ -7,7 +7,6 @@ from pygsdata import GSData
 import h5py
 from edges.const import KNOWN_TELESCOPES
 from read_acq.gsdata import read_acq_to_gsdata, fast_lst_setter
-
 k_manager = jupyter_client.kernelspec.KernelSpecManager()
 avail_kernels = k_manager.find_kernel_specs()
 here = Path(__file__).parent
@@ -135,10 +134,14 @@ def convert(
     Note that the `telescope` and `lst_setter` options have defaults 
     matching Alan's pipeline.
     """
-    obsname = f"{year}-{day:>03}"
+    if telescope == "edges3": #EDGES3 files are named YEA_DOY
+        obsname = f"{year}_{day:>03}"
+    else:
+        obsname = f"{year}-{day:>03}"
 
     if not outdir.exists():
         outdir.mkdir(parents=True, exist_ok=True)
+
 
     outfile = outdir / f"{obsname}.gsh5"
 
