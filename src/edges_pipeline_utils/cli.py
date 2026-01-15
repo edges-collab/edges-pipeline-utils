@@ -3,17 +3,19 @@ from pathlib import Path
 import h5py
 import jupyter_client
 import typer
-from pygsdata import GSData
-from .runners import run_notebook
-import h5py
 from edges.const import KNOWN_TELESCOPES
-from read_acq.gsdata import read_acq_to_gsdata, fast_lst_setter
+from pygsdata import GSData
+from read_acq.gsdata import fast_lst_setter, read_acq_to_gsdata
+
+from .runners import run_notebook
+
 k_manager = jupyter_client.kernelspec.KernelSpecManager()
 avail_kernels = k_manager.find_kernel_specs()
 here = Path(__file__).parent
 
 
 app = typer.Typer()
+
 
 @app.command(
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
@@ -65,7 +67,7 @@ def get_ydays(
     index = 0
     while day <= last:
         tt = day.timetuple()
-        y,d = tt.tm_year, tt.tm_yday
+        y, d = tt.tm_year, tt.tm_yday
         files_to_load = sorted((datadir / str(y)).glob(f"{y}_{d:>03}_*.acq"))
         if files_to_load:
             if print_index:
@@ -139,14 +141,13 @@ def convert(
     Note that the `telescope` and `lst_setter` options have defaults
     matching Alan's pipeline.
     """
-    if telescope == "edges3": #EDGES3 files are named YEA_DOY
+    if telescope == "edges3":  # EDGES3 files are named YEA_DOY
         obsname = f"{year}_{day:>03}"
     else:
         obsname = f"{year}-{day:>03}"
 
     if not outdir.exists():
         outdir.mkdir(parents=True, exist_ok=True)
-
 
     outfile = outdir / f"{obsname}.gsh5"
 
