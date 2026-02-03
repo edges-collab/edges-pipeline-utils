@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pygsdata import GSData
 from edges import modeling as mdl
+from pathlib import Path
+import re
 
 
 def yday_to_alanday(year: int, day: int):
@@ -157,3 +159,32 @@ def calculate_rms(array, digits =3):
 
     rms = np.sqrt(np.mean(array**2))
     return round(rms, digits)
+
+
+
+
+def find_closest_s11date(datadir: str, specyear: int, specday: int) -> str:
+    """Find s11 date stem (year_day_run) in datadir whose (year, day) is closest to specyear, specday."""
+    data_path = Path(datadir)
+    if not data_path.exists():
+        raise FileNotFoundError(f"Data directory not found: {datadir}")
+    stem_to_yd = {}
+    for f in data_path.glob("*_O.s1p"):
+        m = re.match(r"(\d{4})_(\d{3})_(\d+)_O\.s1p", f.name)
+        if not m:
+            continue
+        y, d, run = int(m.group(1)), int(m.group(2)), m.group(3)
+        stem = f"{y}_{d:03d}_{run}"
+        s_file = data_path / f"{stem}_S.s1p"
+        l_file = data_path / f"{stem}_L.s1p"
+        if s_file.exists() and l_file.exists():
+            stem_to_yd[stem] = (y, d)
+    if not stem_to_yd:
+        raise FileNotFoundError(
+            f"No s11 calibration files (O/S/L.s1p) found in {datadir} for any day near specyear={specyear}, specday={specday}"
+        )
+    def day_offset(stem):
+        y, d = stem_to_yd[stem]
+        return (y - specyear) * 365 + (d - specday)
+    closest_stem = min(stem_to_yd, key=lambda s: abs(day_offset(s)))
+    return closest_stem
