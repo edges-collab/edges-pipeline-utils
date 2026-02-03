@@ -1,6 +1,8 @@
 """Various utilities for use in notebooks."""
 
+import re
 from importlib.metadata import version
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,8 +10,6 @@ from edges import modeling as mdl
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 from pygsdata import GSData
-from pathlib import Path
-import re
 
 
 def yday_to_alanday(year: int, day: int):
@@ -173,8 +173,6 @@ def calculate_rms(array, digits=3):
     return round(rms, digits)
 
 
-
-
 def find_closest_s11date(datadir: str, specyear: int, specday: int) -> str:
     """Find s11 date stem (year_day_run) in datadir whose (year, day) is closest to specyear, specday."""
     data_path = Path(datadir)
@@ -195,8 +193,10 @@ def find_closest_s11date(datadir: str, specyear: int, specday: int) -> str:
         raise FileNotFoundError(
             f"No s11 calibration files (O/S/L.s1p) found in {datadir} for any day near specyear={specyear}, specday={specday}"
         )
+
     def day_offset(stem):
         y, d = stem_to_yd[stem]
         return (y - specyear) * 365 + (d - specday)
+
     closest_stem = min(stem_to_yd, key=lambda s: abs(day_offset(s)))
     return closest_stem
