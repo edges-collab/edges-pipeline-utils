@@ -201,9 +201,11 @@ def find_closest_s11date(datadir: str, specyear: int, specday: int) -> str:
     closest_stem = min(stem_to_yd, key=lambda s: abs(day_offset(s)))
     return closest_stem
 
+
 def find_closest_calkit_stem(data_dir: str, year: int, day: int) -> str | None:
     """Find calkit file stem (year_day_run) whose (year, day) is closest to Antenna S11 date"""
     import re
+
     data_path = Path(data_dir)
     if not data_path.exists():
         return None
@@ -221,8 +223,10 @@ def find_closest_calkit_stem(data_dir: str, year: int, day: int) -> str | None:
             stem_to_yd[stem] = (y, d)
     if not stem_to_yd:
         return None
+
     def day_offset(stem):
         y, d = stem_to_yd[stem]
         return (y - year) * 365 + (d - day)
+
     closest_stem = min(stem_to_yd, key=lambda s: abs(day_offset(s)))
     return closest_stem
