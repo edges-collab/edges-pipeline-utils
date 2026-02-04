@@ -200,3 +200,29 @@ def find_closest_s11date(datadir: str, specyear: int, specday: int) -> str:
 
     closest_stem = min(stem_to_yd, key=lambda s: abs(day_offset(s)))
     return closest_stem
+
+def find_closest_calkit_stem(data_dir: str, year: int, day: int) -> str | None:
+    """Find calkit file stem (year_day_run) whose (year, day) is closest to Antenna S11 date"""
+    import re
+    data_path = Path(data_dir)
+    if not data_path.exists():
+        return None
+    stem_to_yd = {}
+    for f in data_path.glob("*_O.s1p"):
+        m = re.match(r"(\d{4})_(\d{3})_(\d+)_O\.s1p", f.name)
+        if not m:
+            continue
+        y, d, run = int(m.group(1)), int(m.group(2)), m.group(3)
+        stem = f"{y}_{d:03d}_{run}"
+        s_file = data_path / f"{stem}_S.s1p"
+        l_file = data_path / f"{stem}_L.s1p"
+        ant_file = data_path / f"{stem}_ant.s1p"
+        if s_file.exists() and l_file.exists() and ant_file.exists():
+            stem_to_yd[stem] = (y, d)
+    if not stem_to_yd:
+        return None
+    def day_offset(stem):
+        y, d = stem_to_yd[stem]
+        return (y - year) * 365 + (d - day)
+    closest_stem = min(stem_to_yd, key=lambda s: abs(day_offset(s)))
+    return closest_stem
