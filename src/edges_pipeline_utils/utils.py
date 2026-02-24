@@ -6,9 +6,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from edges import modeling as mdl
-from matplotlib.cm import ScalarMappable
-from matplotlib.colors import Normalize
 from pygsdata import GSData
 
 
@@ -69,7 +66,6 @@ def print_versions():
     print("Versions: ")
     for pkg in ["read_acq", "pygsdata", "edges-analysis"]:
         print(f"{pkg:>20}: {version(pkg)}")
-
 
 
 def find_closest_s11date(datadir: str, specyear: int, specday: int) -> str:
