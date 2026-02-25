@@ -1,3 +1,5 @@
+"""Command-line interface for EDGES pipeline utilities."""
+
 from pathlib import Path
 
 import h5py
@@ -30,7 +32,8 @@ def run_nb(
     convert_args: str = "",
     cfgfile: Path | None = None,
     basename: str | None = None,
-):
+) -> None:
+    """Execute a Jupyter notebook with the given parameters."""
     kwargs = {}
     for i, arg in enumerate(ctx.args[::2]):
         kwargs[arg.replace("--", "")] = ctx.args[2 * i + 1]
@@ -86,7 +89,8 @@ def get_ydays_from_list(
     print_index: bool = False,
     including_neighboring_days: bool = True,
     datadir: Path = Path("/data5/edges/data/EDGES3_data/MRO/mro/ant/"),
-):
+) -> None:
+    """List year-day combinations from an NPZ file that have ACQ data."""
     import numpy as np
 
     data = np.load(npz_path)
@@ -108,7 +112,7 @@ def get_ydays_from_list(
 
             files_to_load = sorted((datadir / str(y)).glob(f"{key}_*.acq"))
             if files_to_load:
-                print(f"{key}")
+                typer.echo(key)
                 printed.add(key)
                 index += 1
 
@@ -130,21 +134,20 @@ def gather(files: list[Path], outfile: Path):
 def convert(
     year: int,
     day: int,
-    outdir: Path = None,
+    outdir: Path | None = None,
     telescope: str = "edges-low-alan",
     lst_setter: str = "fast",
     datadir: Path = Path("/data5/edges/data/2014_February_Boolardy/mro/low/"),
     force: bool = False,
-):
+) -> None:
     """Convert ACQ files to GSH5 files, one per day.
 
     Note that the `telescope` and `lst_setter` options have defaults
     matching Alan's pipeline.
     """
-    if telescope == "edges3":  # EDGES3 files are named YEA_DOY
-        obsname = f"{year}_{day:>03}"
-    else:
-        obsname = f"{year}-{day:>03}"
+    if outdir is None:
+        outdir = Path.cwd()
+    obsname = f"{year}_{day:>03}" if telescope == "edges3" else f"{year}-{day:>03}"
 
     if not outdir.exists():
         outdir.mkdir(parents=True, exist_ok=True)
@@ -152,7 +155,7 @@ def convert(
     outfile = outdir / f"{obsname}.gsh5"
 
     if outfile.exists() and not force:
-        print(f"{outfile} exists, skipping...")
+        typer.echo(f"{outfile} exists, skipping...")
         return
 
     files_to_load = sorted((Path(datadir) / str(year)).glob(f"{year}_{day:03}_*.acq"))
@@ -164,7 +167,7 @@ def convert(
     )
 
     data.write_gsh5(outfile)
-    print("Wrote", outfile)
+    typer.echo(f"Wrote {outfile}")
 
 
 if __name__ == "__main__":

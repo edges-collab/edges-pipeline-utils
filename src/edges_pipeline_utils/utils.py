@@ -1,6 +1,8 @@
 """Various utilities for use in notebooks."""
 
 import re
+import sys
+import sys
 from importlib.metadata import version
 from pathlib import Path
 
@@ -12,7 +14,8 @@ from matplotlib.colors import Normalize
 from pygsdata import GSData
 
 
-def yday_to_alanday(year: int, day: int):
+def yday_to_alanday(year: int, day: int) -> int:
+    """Convert (year, day-of-year) to Alan's continuous day index."""
     year = int(year)
     day = int(day)
     if year == 2015:
@@ -24,7 +27,10 @@ def yday_to_alanday(year: int, day: int):
     raise ValueError(f"Year must be 2015, 2016 or 2017, got '{year}'")
 
 
-def plot_single_spectrum(data: GSData, alanspec=None, attribute="data"):
+def plot_single_spectrum(
+    data: GSData, alanspec=None, attribute: str = "data"
+) -> None:
+    """Plot a single spectrum from GSData, optionally with Alan's spectrum."""
     if alanspec is not None:
         fig, ax = plt.subplots(
             2,
@@ -65,15 +71,15 @@ def plot_single_spectrum(data: GSData, alanspec=None, attribute="data"):
     ax[0, 0].legend(frameon=False)
 
 
-def print_versions():
-    print("Versions: ")
+def print_versions() -> None:
+    """Print versions of key EDGES packages."""
+    sys.stdout.write("Versions: \n")
     for pkg in ["read_acq", "pygsdata", "edges-analysis"]:
-        print(f"{pkg:>20}: {version(pkg)}")
-
+        sys.stdout.write(f"{pkg:>20}: {version(pkg)}\n")
 
 
 def find_closest_s11date(datadir: str, specyear: int, specday: int) -> str:
-    """Find s11 date stem (year_day_run) in datadir whose (year, day) is closest to specyear, specday."""
+    """Find s11 date stem (year_day_run) in datadir closest to specyear, specday."""
     data_path = Path(datadir)
     if not data_path.exists():
         raise FileNotFoundError(f"Data directory not found: {datadir}")
@@ -90,7 +96,8 @@ def find_closest_s11date(datadir: str, specyear: int, specday: int) -> str:
             stem_to_yd[stem] = (y, d)
     if not stem_to_yd:
         raise FileNotFoundError(
-            f"No s11 calibration files (O/S/L.s1p) found in {datadir} for any day near specyear={specyear}, specday={specday}"
+            f"No s11 calibration files (O/S/L.s1p) found in {datadir} "
+            f"for any day near specyear={specyear}, specday={specday}"
         )
 
     def day_offset(stem):
@@ -102,7 +109,7 @@ def find_closest_s11date(datadir: str, specyear: int, specday: int) -> str:
 
 
 def find_closest_calkit_stem(data_dir: str, year: int, day: int) -> str | None:
-    """Find calkit file stem (year_day_run) whose (year, day) is closest to Antenna S11 date"""
+    """Find calkit file stem closest to Antenna S11 date."""
     import re
 
     data_path = Path(data_dir)

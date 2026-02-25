@@ -1,3 +1,5 @@
+"""EDGES pipeline utilities package."""
+
 from pathlib import Path
 
 DATA = Path(__file__).parent / "input-data"

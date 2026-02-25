@@ -1,3 +1,5 @@
+"""Notebook execution utilities for EDGES pipelines."""
+
 import subprocess as sbp
 from pathlib import Path
 
@@ -22,7 +24,8 @@ def run_notebook(
     cfgfile: Path | None = None,
     basename: str | None = None,
     **kwargs,
-):
+) -> Path:
+    """Execute a Jupyter notebook with papermill."""
     if basename is None:
         basename = notebook.stem
 
