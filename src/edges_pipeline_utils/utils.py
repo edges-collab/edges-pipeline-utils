@@ -2,7 +2,6 @@
 
 import re
 import sys
-import sys
 from importlib.metadata import version
 from pathlib import Path
 
@@ -24,9 +23,7 @@ def yday_to_alanday(year: int, day: int) -> int:
     raise ValueError(f"Year must be 2015, 2016 or 2017, got '{year}'")
 
 
-def plot_single_spectrum(
-    data: GSData, alanspec=None, attribute: str = "data"
-) -> None:
+def plot_single_spectrum(data: GSData, alanspec=None, attribute: str = "data") -> None:
     """Plot a single spectrum from GSData, optionally with Alan's spectrum."""
     if alanspec is not None:
         fig, ax = plt.subplots(
@@ -73,6 +70,7 @@ def print_versions() -> None:
     sys.stdout.write("Versions: \n")
     for pkg in ["read_acq", "pygsdata", "edges-analysis"]:
         sys.stdout.write(f"{pkg:>20}: {version(pkg)}\n")
+
 
 def find_closest_s11date(datadir: str, specyear: int, specday: int) -> str:
     """Find s11 date stem (year_day_run) in datadir closest to specyear, specday."""
