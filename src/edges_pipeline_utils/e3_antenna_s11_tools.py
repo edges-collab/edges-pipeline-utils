@@ -1,34 +1,40 @@
-'''
+"""
 Functions for testing Antenna S11 variabilities.
-'''
+"""
+
+import glob
 from pathlib import Path
+
 import numpy as np
 from astropy import units as un
-import glob
-from edges.cal import ReflectionCoefficient, S11ModelParams
 from edges import modeling as mdl
 from edges.alanmode.alanmode import reads1p1
+from edges.cal import ReflectionCoefficient, S11ModelParams
 from edges.frequencies import get_mask
+
 from edges_pipeline_utils import utils
 
-
-root_dir: Path = Path('/data5/edges/data/EDGES3_data/MRO') # this is where the raw files are
+root_dir: Path = Path(
+    "/data5/edges/data/EDGES3_data/MRO"
+)  # this is where the raw files are
 alan_dir: Path = Path("/data4/vydula/edges/edges3_files/scripts/alan_300_310_tests/")
 datadir: Path = Path("/data4/vydula/edges/packages/edges3-data-analysis/data/")
 
 
-def calculate_rms(array, digits =3):
+def calculate_rms(array, digits=3):
     rms = np.sqrt(np.nanmean(array**2))
     return round(rms, digits)
 
 
-def get_ant_s11(year, day, f_low=40, f_high=190, raw=False, n_terms =12, return_model = False):
+def get_ant_s11(
+    year, day, f_low=40, f_high=190, raw=False, n_terms=12, return_model=False
+):
     try:
         pattern_base = f"{root_dir}/{year}_{day:03d}_*"
-        Tfopen = glob.glob(f'{pattern_base}O.s1p')[0]
-        Tfshort = glob.glob(f'{pattern_base}S.s1p')[0]
-        Tfload = glob.glob(f'{pattern_base}L.s1p')[0]
-        Tfant = glob.glob(f'{pattern_base}ant.s1p')[0]
+        Tfopen = glob.glob(f"{pattern_base}O.s1p")[0]
+        Tfshort = glob.glob(f"{pattern_base}S.s1p")[0]
+        Tfload = glob.glob(f"{pattern_base}L.s1p")[0]
+        Tfant = glob.glob(f"{pattern_base}ant.s1p")[0]
     except IndexError:
         # If any file is missing, return None
         print(f"Missing one or more required files for year {year}, day {day}")
@@ -52,10 +58,9 @@ def get_ant_s11(year, day, f_low=40, f_high=190, raw=False, n_terms =12, return_
         return None, None, None
 
     # get antenna temperature from temperature logger
-    file_name = Tfant.split('/')[-1]
+    file_name = Tfant.split("/")[-1]
     print(file_name)
     temperature = utils.extract_temperature(file_name)
-
 
     mask = get_mask(raw_freq, f_low * un.MHz, f_high * un.MHz)
 
@@ -88,18 +93,16 @@ def get_ant_s11(year, day, f_low=40, f_high=190, raw=False, n_terms =12, return_
 
     if return_model:
         return ants11
-    else:
-        return temperature.value, mod_freq, ants11.reflection_coefficient
-
+    return temperature.value, mod_freq, ants11.reflection_coefficient
 
 
 def get_cut_off_freq_range(cut_off=-10, f_low=50, f_high=120, n_terms=16):
     _, ref_freq, ref_ants11 = get_ant_s11(
         year=2023, day=154, f_low=f_low, f_high=f_high, n_terms=n_terms
     )
-    '''
+    """
     Returns the frequency range based on S11 cut-off
-    '''
+    """
 
     s11_dB = 20 * np.log10(np.abs(ref_ants11))
 
@@ -112,4 +115,3 @@ def get_cut_off_freq_range(cut_off=-10, f_low=50, f_high=120, n_terms=16):
         last_index = crossings[-1]
 
     return ref_freq[first_index], ref_freq[last_index]
-

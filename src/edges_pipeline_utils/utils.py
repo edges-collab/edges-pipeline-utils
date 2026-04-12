@@ -2,21 +2,22 @@
 
 import re
 import sys
+from datetime import datetime, time, timedelta
 from importlib.metadata import version
 from pathlib import Path
 
+import astropy.units as un
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta, time
 from pygsdata import GSData
-import astropy.units as un
 
-
-
-root_dir: Path = Path('/data5/edges/data/EDGES3_data/MRO/') # this is where the raw files are
+root_dir: Path = Path(
+    "/data5/edges/data/EDGES3_data/MRO/"
+)  # this is where the raw files are
 alan_dir: Path = Path("/data4/vydula/edges/edges3_files/scripts/alan_300_310_tests/")
 datadir: Path = Path("/data4/vydula/edges/packages/edges3-data-analysis/data/")
+
 
 def yday_to_alanday(year: int, day: int) -> int:
     """Convert (year, day-of-year) to Alan's continuous day index."""
@@ -140,12 +141,11 @@ def find_closest_calkit_stem(data_dir: str, year: int, day: int) -> str | None:
     return closest_stem
 
 
-
 def extract_temperature(
-        file_name,
-        load="box",
-        extract_log=False,
-        temperature_file=datadir / "temperature_data.csv",
+    file_name,
+    load="box",
+    extract_log=False,
+    temperature_file=datadir / "temperature_data.csv",
 ):
     """
     Take start and end time from the ancillary data and return the average temperature in that time range
@@ -153,7 +153,6 @@ def extract_temperature(
     sits directly on the hot load at the end of 8 position switch
     --  For amb, long cable open and short, the register 101 is used which is the temperature of the ambient load
     """
-
     # get the datetime object using file name
 
     year = int(file_name[0:4])
@@ -223,12 +222,12 @@ def filter_nighttime(datetimes, start_date, end_date, start_night=19, end_night=
         start_night (float): start of the night time, default is 19 hr
         end_night (float): start of the night time, default is 7 hr
 
-    Returns:
+    Returns
+    -------
         list: List of datetime objects during nighttime.
     """
     nighttime = []
     for dt in datetimes:
-
         if dt >= start_date and dt <= end_date:
             if dt.time() >= time(start_night, 0) or dt.time() < time(end_night, 0):
                 nighttime.append(dt)
@@ -240,7 +239,6 @@ def extract_dates(anc_obj):
     Take ancilliary data from acq file and return the start and end time as datetime objects.
 
     """
-
     start_time = anc_obj.data["times"][0][0].decode("utf-8")  # first instance of time
     end_time = anc_obj.data["times"][-1][0].decode("utf-8")  # second instance of time
 
@@ -255,7 +253,7 @@ def extract_dates(anc_obj):
 
 
 def extract_temp_values_from_logger(
-        temperature_file="/data5/edges/data/EDGES3_data/MRO/temperature_logger/temperature.log",
+    temperature_file="/data5/edges/data/EDGES3_data/MRO/temperature_logger/temperature.log",
 ):
     """
     Easiest way (i think) is to read one line at a time, check conditions in each line,
@@ -264,7 +262,6 @@ def extract_temp_values_from_logger(
     If such read out is encountered, count is 'reset' meaning that readout won't be appended to the dataframe
 
     """
-
     # lets first create a panda dataframe
 
     df = pd.DataFrame(
@@ -332,7 +329,7 @@ def extract_temp_values_from_logger(
                         count = count  # do nothing
 
             if (
-                    "0 " in this_line
+                "0 " in this_line
             ):  # this is the line that looks like "0 +3.000000e+01" --> we don't need this now
                 count += 1  # do nothing
 
@@ -351,7 +348,7 @@ def extract_temp_values_from_logger(
             if "101 " in this_line:
                 values = this_line.split(" ")  # this line is for sensor 101
                 if (
-                        len(values) == 2
+                    len(values) == 2
                 ):  # check if there are two values in that line -- one for the sensor and one for the value
                     try:
                         amb_load_temp = float(values[1].strip())
@@ -442,10 +439,10 @@ def extract_temp_values_from_logger(
 
 
 def extract_temperature(
-        file_name,
-        load="box",
-        extract_log=False,
-        temperature_file=datadir / "temperature_data.csv",
+    file_name,
+    load="box",
+    extract_log=False,
+    temperature_file=datadir / "temperature_data.csv",
 ):
     """
     Take start and end time from the ancillary data and return the average temperature in that time range
@@ -453,7 +450,6 @@ def extract_temperature(
     sits directly on the hot load at the end of 8 position switch
     --  For amb, long cable open and short, the register 101 is used which is the temperature of the ambient load
     """
-
     # get the datetime object using file name
 
     year = int(file_name[0:4])
@@ -517,21 +513,23 @@ def extract_temperature(
 # weather log is a big file so lets try to downselect to the days that we need
 
 
-def downselect_weatherlog(start_date, end_date, path='/data5/edges/data/2014_February_Boolardy/'):
+def downselect_weatherlog(
+    start_date, end_date, path="/data5/edges/data/2014_February_Boolardy/"
+):
     """
     Filters entries in the weather log text file by date range and saves them to a CSV file.
 
     """
-
-    input_file_path = path + 'weather2.txt'
+    input_file_path = path + "weather2.txt"
 
     output_path = datadir / f"weather_log_{start_date}_to_{end_date}.txt"
     start_datetime = datetime.strptime(start_date, "%Y_%j")
     end_datetime = datetime.strptime(end_date, "%Y_%j")
 
-    with open(input_file_path, 'r') as txt_file, open(output_path, 'w') as out_file:
-
-        out_file.write("Datetime Rack_Temp(K) Ambient_Temp(K) Ambient_Hum(%) Frontend_Temp(K) RCV3_LNA_Temp(K)\n")
+    with open(input_file_path) as txt_file, open(output_path, "w") as out_file:
+        out_file.write(
+            "Datetime Rack_Temp(K) Ambient_Temp(K) Ambient_Hum(%) Frontend_Temp(K) RCV3_LNA_Temp(K)\n"
+        )
 
         for line in txt_file:
             parts = line.split()
@@ -553,20 +551,22 @@ def get_weatherlog_closest_to_time(file_path, input_time):
     """
     Retrieve the log entry closest to the given input time.
 
-    Parameters:
+    Parameters
+    ----------
         file_path (str): Path to the weather log file.
         input_time (str): Input time in the format "%Y:%j:%H:%M:%S".
 
-    Returns:
+    Returns
+    -------
         dict: A dictionary containing the closest weather log entry, or None if no entries exist.
     """
     from datetime import datetime
 
     input_datetime = datetime.strptime(input_time, "%Y:%j:%H:%M:%S")
     closest_entry = None
-    min_time_diff = float('inf')
+    min_time_diff = float("inf")
 
-    with open(file_path, 'r') as file:
+    with open(file_path) as file:
         headers = file.readline().strip().split()  # Read headers
 
         for line in file:
@@ -590,6 +590,4 @@ def get_weatherlog_closest_to_time(file_path, input_time):
             headers[i]: float(closest_entry[i]) if i > 1 else closest_entry[i]
             for i in range(len(headers))
         }
-    else:
-        return None
-
+    return None
