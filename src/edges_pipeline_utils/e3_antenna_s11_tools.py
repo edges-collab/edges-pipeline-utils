@@ -26,6 +26,24 @@ def calculate_rms(array, digits=3):
     return round(rms, digits)
 
 
+def _as_mhz_float(x: float | un.Quantity) -> float:
+    """Band edges in MHz as a plain float.
+
+    Accepts a number in MHz or any :class:`~astropy.units.Quantity` with frequency
+    units, so callers are not double-converted with ``f * un.MHz``.
+    """
+    if isinstance(x, un.Quantity):
+        if not x.unit.is_equivalent(un.MHz):
+            raise TypeError(
+                f"Expected a frequency for f_low/f_high (e.g. MHz); got unit {x.unit}. "
+                "Pass a float in MHz, or a single frequency Quantity, not f*u.MHz twice."
+            )
+        return float(x.to(un.MHz).value)
+    if hasattr(x, "to_value"):
+        return float(x.to_value(un.MHz))
+    return float(np.asarray(x, dtype=float))
+
+
 def get_ant_s11(
     year, day, f_low=40, f_high=190, raw=False, n_terms=12, return_model=False
 ):
@@ -59,10 +77,11 @@ def get_ant_s11(
 
     # get antenna temperature from temperature logger
     file_name = Tfant.split("/")[-1]
-    print(file_name)
     temperature = utils.extract_temperature(file_name)
 
-    mask = get_mask(raw_freq, f_low * un.MHz, f_high * un.MHz)
+    f_low_mhz = _as_mhz_float(f_low)
+    f_high_mhz = _as_mhz_float(f_high)
+    mask = get_mask(raw_freq, f_low_mhz * un.MHz, f_high_mhz * un.MHz)
 
     # use 53-105 MHz --> Alan sets wfstart/stop to 54-104 MHz but also hardcodes /pm 1 to it
     ea_freq = raw_freq[mask]
@@ -75,13 +94,13 @@ def get_ant_s11(
     if raw:
         mod_freq = ea_freq
     else:
-        mod_freq = np.arange(f_low, f_high, 0.390) * un.MHz  # B18 resolution is 390 kHz
+        mod_freq = np.arange(f_low_mhz, f_high_mhz, 0.390) * un.MHz  # B18 resolution is 390 kHz
 
     ants11 = ants11_raw.smoothed(
         params=S11ModelParams(
             model=mdl.Polynomial(
                 n_terms=n_terms,
-                transform=mdl.Log10Transform(scale=(f_low + f_high) / 2),
+                transform=mdl.Log10Transform(scale=(f_low_mhz + f_high_mhz) / 2),
             ),
             complex_model_type=mdl.ComplexRealImagModel,
             set_transform_range=True,
