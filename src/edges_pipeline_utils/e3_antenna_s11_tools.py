@@ -94,7 +94,9 @@ def get_ant_s11(
     if raw:
         mod_freq = ea_freq
     else:
-        mod_freq = np.arange(f_low_mhz, f_high_mhz, 0.390) * un.MHz  # B18 resolution is 390 kHz
+        mod_freq = (
+            np.arange(f_low_mhz, f_high_mhz, 0.390) * un.MHz
+        )  # B18 resolution is 390 kHz
 
     ants11 = ants11_raw.smoothed(
         params=S11ModelParams(
