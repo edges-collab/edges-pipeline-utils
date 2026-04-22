@@ -113,7 +113,7 @@ def get_ant_s11(
     )
 
     if return_model:
-        return ants11
+        return ants11_raw, ants11
     return temperature.value, mod_freq, ants11.reflection_coefficient
 
 
