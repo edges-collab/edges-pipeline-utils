@@ -2,7 +2,7 @@
 
 import re
 import sys
-from datetime import datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 from importlib.metadata import version
 from pathlib import Path
 
@@ -17,6 +17,10 @@ root_dir: Path = Path(
 )  # this is where the raw files are
 alan_dir: Path = Path("/data4/vydula/edges/edges3_files/scripts/alan_300_310_tests/")
 datadir: Path = Path("/data4/vydula/edges/packages/edges3-data-analysis/data/")
+
+_DEFAULT_TEMP_LOG = (
+    "/data5/edges/data/EDGES3_data/MRO/temperature_logger/temperature.log"
+)
 
 
 def yday_to_alanday(year: int, day: int) -> int:
@@ -35,7 +39,7 @@ def yday_to_alanday(year: int, day: int) -> int:
 def plot_single_spectrum(data: GSData, alanspec=None, attribute: str = "data") -> None:
     """Plot a single spectrum from GSData, optionally with Alan's spectrum."""
     if alanspec is not None:
-        fig, ax = plt.subplots(
+        _fig, ax = plt.subplots(
             2,
             1,
             sharex=True,
@@ -44,7 +48,7 @@ def plot_single_spectrum(data: GSData, alanspec=None, attribute: str = "data") -
             squeeze=False,
         )
     else:
-        fig, ax = plt.subplots(
+        _fig, ax = plt.subplots(
             1,
             1,
             sharex=True,
@@ -107,14 +111,11 @@ def find_closest_s11date(datadir: str, specyear: int, specday: int) -> str:
         y, d = stem_to_yd[stem]
         return (y - specyear) * 365 + (d - specday)
 
-    closest_stem = min(stem_to_yd, key=lambda s: abs(day_offset(s)))
-    return closest_stem
+    return min(stem_to_yd, key=lambda s: abs(day_offset(s)))
 
 
 def find_closest_calkit_stem(data_dir: str, year: int, day: int) -> str | None:
     """Find calkit file stem closest to Antenna S11 date."""
-    import re
-
     data_path = Path(data_dir)
     if not data_path.exists():
         return None
@@ -137,8 +138,7 @@ def find_closest_calkit_stem(data_dir: str, year: int, day: int) -> str | None:
         y, d = stem_to_yd[stem]
         return (y - year) * 365 + (d - day)
 
-    closest_stem = min(stem_to_yd, key=lambda s: abs(day_offset(s)))
-    return closest_stem
+    return min(stem_to_yd, key=lambda s: abs(day_offset(s)))
 
 
 def extract_temperature(
@@ -147,65 +147,38 @@ def extract_temperature(
     extract_log=False,
     temperature_file=datadir / "temperature_data.csv",
 ):
-    """
-    Take start and end time from the ancillary data and return the average temperature in that time range
-    --  For hot load, temperature from hot load temperature sensor is used (register 102) that
-    sits directly on the hot load at the end of 8 position switch
-    --  For amb, long cable open and short, the register 101 is used which is the temperature of the ambient load
-    """
-    # get the datetime object using file name
+    """Return the load temperature nearest the time encoded in ``file_name``.
 
+    For hot load, register 102 (hot-load sensor) is used. For amb / open / short,
+    register 101 (ambient load) is used; otherwise the front-end temperature is
+    returned.
+    """
     year = int(file_name[0:4])
     doy = int(file_name[5:8])
     hour = int(file_name[9:11])
 
-    start_time = datetime(year, 1, 1) + timedelta(days=doy - 1, hours=hour)
+    start_time = datetime(year, 1, 1, tzinfo=UTC) + timedelta(days=doy - 1, hours=hour)
 
-    if extract_log == True:
-        """
-        extract the data from log only if required.
-        Default is False, meaning the pre-extracted file will be used
-        This is don to avoid repeted file parsing
-
-        """
-        temperature_file = extract_temp_values_from_logger(
-            "/data5/edges/data/EDGES3_data/MRO/temperature_logger/temperature.log"
-        )
-
-        # default file is temperature_data.csv
+    if extract_log:
+        # Re-parse the logger only when requested to avoid repeated file parsing.
+        temperature_file = extract_temp_values_from_logger(_DEFAULT_TEMP_LOG)
 
     df = pd.read_csv(temperature_file)
-
-    df["Time"] = pd.to_datetime(df["Time"])
+    df["Time"] = pd.to_datetime(df["Time"], utc=True)
 
     closest_row = df.loc[(df["Time"] - start_time).abs().idxmin()]
 
     front_end_temp = closest_row["Front End temperature"]
     amb_load_temp = closest_row["Amb load temperature"]
     hot_load_temp = closest_row["Hot load temperature"]
-    inner_box_temp = closest_row["Inner box temperature"]
-    therm_control = closest_row["Thermal Control"]
-    battery_voltage = closest_row["Battery Voltage"]
-    battery_current = closest_row["PR59 Current"]
 
+    # hot -> hot_load; amb -> amb_load; open/short/box -> front_end
     if load == "hot":
         temperature = hot_load_temp
-        # print('hot', temperature)
-
-    elif load == "open" or "short" or "box" or "amb":
-        temperature = amb_load_temp  # this is default if no load is specified
-
-    if load == "amb":
+    elif load == "amb":
         temperature = amb_load_temp
-        # print('amb', temperature)
-
-    elif load == "hot":
-        temperature = hot_load_temp
-        # print('hot', temperature)
-
-    elif load == "open" or "short" or "box":
-        temperature = front_end_temp  # this is default if no load is specified
-        # print('default', temperature)
+    else:
+        temperature = front_end_temp
 
     temperature_deg_C = temperature * un.deg_C
     temperature_K = temperature_deg_C.to(un.K, equivalencies=un.temperature())
@@ -214,56 +187,62 @@ def extract_temperature(
 
 
 def filter_nighttime(datetimes, start_date, end_date, start_night=19, end_night=7):
-    """
-    Filters a list of datetime objects to include only those corresponding to night time observations
+    """Filter datetimes to nighttime observations within a date range.
 
-    Args:
-        datetimes (list): List of datetime objects.
-        start_night (float): start of the night time, default is 19 hr
-        end_night (float): start of the night time, default is 7 hr
+    Parameters
+    ----------
+    datetimes
+        List of datetime objects.
+    start_night
+        Start of nighttime in hours (default 19).
+    end_night
+        End of nighttime in hours (default 7).
 
     Returns
     -------
-        list: List of datetime objects during nighttime.
+    list
+        Datetime objects during nighttime.
     """
     nighttime = []
     for dt in datetimes:
-        if dt >= start_date and dt <= end_date:
-            if dt.time() >= time(start_night, 0) or dt.time() < time(end_night, 0):
-                nighttime.append(dt)
+        in_range = start_date <= dt <= end_date
+        is_night = dt.time() >= time(start_night, 0) or dt.time() < time(end_night, 0)
+        if in_range and is_night:
+            nighttime.append(dt)
     return nighttime
 
 
 def extract_dates(anc_obj):
-    """
-    Take ancilliary data from acq file and return the start and end time as datetime objects.
-
-    """
-    start_time = anc_obj.data["times"][0][0].decode("utf-8")  # first instance of time
-    end_time = anc_obj.data["times"][-1][0].decode("utf-8")  # second instance of time
+    """Return start/end times from ACQ ancillary data as datetime objects."""
+    start_time = anc_obj.data["times"][0][0].decode("utf-8")
+    end_time = anc_obj.data["times"][-1][0].decode("utf-8")
 
     date_format = "%Y:%j:%H:%M:%S"
-
-    # Parse the string into a datetime object
     start_time = datetime.strptime(start_time, date_format)
-
     end_time = datetime.strptime(end_time, date_format)
 
     return (start_time, end_time)
 
 
-def extract_temp_values_from_logger(
-    temperature_file="/data5/edges/data/EDGES3_data/MRO/temperature_logger/temperature.log",
-):
-    """
-    Easiest way (i think) is to read one line at a time, check conditions in each line,
-    extract a datetime object and temperature readouts.
-    I am throwing away the readouts that don't have complete information.
-    If such read out is encountered, count is 'reset' meaning that readout won't be appended to the dataframe
+def _try_sensor_float(line: str, prefix: str) -> float | None:
+    """Parse ``'<sensor> <value>'`` lines; return float or None."""
+    if prefix not in line:
+        return None
+    values = line.split(" ")
+    if len(values) != 2:
+        return None
+    try:
+        return float(values[1].strip())
+    except ValueError:
+        return None
 
-    """
-    # lets first create a panda dataframe
 
+def extract_temp_values_from_logger(temperature_file=_DEFAULT_TEMP_LOG):
+    """Parse the temperature logger into a CSV and return its path.
+
+    Reads one line at a time and keeps only complete sensor records. Incomplete
+    records reset the field counter and are discarded.
+    """
     df = pd.DataFrame(
         {
             "Time": [],
@@ -277,141 +256,77 @@ def extract_temp_values_from_logger(
         }
     )
 
-    with open(temperature_file) as file:
+    year = doy = 0
+    date_object = None
+    front_end_box_temp = amb_load_temp = hot_load_temp = None
+    innerbox_temp = therm_control = battery_voltage = pr59_current = None
+    count = 0
+
+    with Path(temperature_file).open() as file:
         for line in file:
             this_line = line
-            # print(this_line)
 
             if "_" in this_line:
-                # print(this_line)
-
-                values = this_line.split(
-                    "_"
-                )  # this is the line that looks like 2022_318_03
+                values = this_line.split("_")  # e.g. 2022_318_03
                 if len(values) == 3:
-                    count = 0  # reset everytime the first line is encountered
-
+                    count = 0
                     try:
                         year = int(values[0])
                         doy = int(values[1])
                         count += 1
-                    except:
-                        # skip this data record
-                        count = count  # do nothing
+                    except ValueError:
+                        pass
 
             if "UTC" in this_line:
-                values = this_line.split(
-                    " "
-                )  # this_line is alredy split with single space
-
-                # this is the line that looks like "Mon Nov 14 03:20:26 UTC 2022"
-                # we only want time from this
+                # Line looks like: "Mon Nov 14 03:20:26 UTC 2022"
+                values = this_line.split(" ")
                 if len(values) == 6:
-                    time = values[3]
-                    values = time.split(
-                        ":"
-                    )  # we take the time that looks like "03:20:26"
-
+                    clock = values[3].split(":")
                     try:
-                        hh = int(values[0])
-                        mm = int(values[1])
-                        ss = int(values[2])
-
-                        # create datetime object using year, day of the year, hh,mm,ss information.
-
-                        date_object = datetime(year, 1, 1, hh, mm, ss) + timedelta(
-                            days=doy - 1
-                        )
+                        hh, mm, ss = int(clock[0]), int(clock[1]), int(clock[2])
+                        date_object = datetime(
+                            year, 1, 1, hh, mm, ss, tzinfo=UTC
+                        ) + timedelta(days=doy - 1)
                         count += 1
-
-                    except:
-                        # skip this data record
-                        count = count  # do nothing
-
-            if (
-                "0 " in this_line
-            ):  # this is the line that looks like "0 +3.000000e+01" --> we don't need this now
-                count += 1  # do nothing
-
-            if "100 " in this_line:
-                values = this_line.split(" ")  # this line is for sensor 100
-                if len(values) == 2:
-                    # check if there are two values in that line -- one for the sensor and one for the value
-
-                    try:
-                        front_end_box_temp = float(values[1].strip())
-                        count += 1
-                    except:
-                        # skip this data record
-                        count = count  # do nothing
-
-            if "101 " in this_line:
-                values = this_line.split(" ")  # this line is for sensor 101
-                if (
-                    len(values) == 2
-                ):  # check if there are two values in that line -- one for the sensor and one for the value
-                    try:
-                        amb_load_temp = float(values[1].strip())
-                        count += 1
-
                     except ValueError:
-                        # skip this data record
-                        count = count  # do nothing
+                        pass
 
-            if "102 " in this_line:
-                values = this_line.split(" ")  # this line is for sensor 102
-                if len(values) == 2:
-                    try:
-                        hot_load_temp = float(values[1].strip())
-                        count += 1
+            # "0 +3.000000e+01" lines are ignored but counted historically
+            if "0 " in this_line:
+                count += 1
 
-                    except ValueError:
-                        # skip this data record
-                        count = count  # do nothing
+            sensors = {
+                "100 ": "front_end_box_temp",
+                "101 ": "amb_load_temp",
+                "102 ": "hot_load_temp",
+                "103 ": "innerbox_temp",
+                "106 ": "therm_control",
+                "150 ": "battery_voltage",
+                "152 ": "pr59_current",
+            }
+            current = {
+                "front_end_box_temp": front_end_box_temp,
+                "amb_load_temp": amb_load_temp,
+                "hot_load_temp": hot_load_temp,
+                "innerbox_temp": innerbox_temp,
+                "therm_control": therm_control,
+                "battery_voltage": battery_voltage,
+                "pr59_current": pr59_current,
+            }
 
-            if "103 " in this_line:
-                values = this_line.split(" ")  # this line is for sensor 103
-                if len(values) == 2:
-                    try:
-                        innerbox_temp = float(values[1].strip())
-                        count += 1
+            for prefix, name in sensors.items():
+                value = _try_sensor_float(this_line, prefix)
+                if value is not None:
+                    current[name] = value
+                    count += 1
 
-                    except ValueError:
-                        # skip this data record
-                        count = count  # do nothing
-
-            if "106 " in this_line:
-                values = this_line.split(" ")  # this line is for sensor 106
-                if len(values) == 2:
-                    try:
-                        therm_control = float(values[1].strip())
-                        count += 1
-
-                    except ValueError:
-                        # skip this data record
-                        count = count  # do nothing
-
-            if "150 " in this_line:
-                values = this_line.split(" ")  # this is battery voltage 150
-                if len(values) == 2:
-                    try:
-                        battery_voltage = float(values[1].strip())
-                        count += 1
-
-                    except ValueError:
-                        # skip this data record
-                        count = count  # do nothing
-
-            if "152 " in this_line:
-                values = this_line.split(" ")  # this is PR59 current 152
-                if len(values) == 2:
-                    try:
-                        pr59_current = float(values[1].strip())
-                        count += 1
-
-                    except ValueError:
-                        # skip this data record
-                        count = count  # do nothing
+            front_end_box_temp = current["front_end_box_temp"]
+            amb_load_temp = current["amb_load_temp"]
+            hot_load_temp = current["hot_load_temp"]
+            innerbox_temp = current["innerbox_temp"]
+            therm_control = current["therm_control"]
+            battery_voltage = current["battery_voltage"]
+            pr59_current = current["pr59_current"]
 
             if count == 10:
                 temp_df = pd.DataFrame(
@@ -426,110 +341,29 @@ def extract_temp_values_from_logger(
                         "PR59 Current": [pr59_current],
                     }
                 )
-
-                # Concatenate the this DataFrame with the original DataFrame
                 df = pd.concat([df, temp_df], ignore_index=True)
-                count = 0  # reset
+                count = 0
 
-    # for now I am saving it where the function is called, but we could find a more organized way of saving this file
-
-    df.to_csv(f"{datadir}/temperature_data.csv")
-
-    return f"{datadir}/temperature_data.csv"
-
-
-def extract_temperature(
-    file_name,
-    load="box",
-    extract_log=False,
-    temperature_file=datadir / "temperature_data.csv",
-):
-    """
-    Take start and end time from the ancillary data and return the average temperature in that time range
-    --  For hot load, temperature from hot load temperature sensor is used (register 102) that
-    sits directly on the hot load at the end of 8 position switch
-    --  For amb, long cable open and short, the register 101 is used which is the temperature of the ambient load
-    """
-    # get the datetime object using file name
-
-    year = int(file_name[0:4])
-    doy = int(file_name[5:8])
-    hour = int(file_name[9:11])
-
-    start_time = datetime(year, 1, 1) + timedelta(days=doy - 1, hours=hour)
-
-    if extract_log == True:
-        """
-        extract the data from log only if required.
-        Default is False, meaning the pre-extracted file will be used
-        This is don to avoid repeted file parsing
-
-        """
-        temperature_file = extract_temp_values_from_logger(
-            "/data5/edges/data/EDGES3_data/MRO/temperature_logger/temperature.log"
-        )
-
-        # default file is temperature_data.csv
-
-    df = pd.read_csv(temperature_file)
-
-    df["Time"] = pd.to_datetime(df["Time"])
-
-    closest_row = df.loc[(df["Time"] - start_time).abs().idxmin()]
-
-    front_end_temp = closest_row["Front End temperature"]
-    amb_load_temp = closest_row["Amb load temperature"]
-    hot_load_temp = closest_row["Hot load temperature"]
-    inner_box_temp = closest_row["Inner box temperature"]
-    therm_control = closest_row["Thermal Control"]
-    battery_voltage = closest_row["Battery Voltage"]
-    battery_current = closest_row["PR59 Current"]
-
-    if load == "hot":
-        temperature = hot_load_temp
-        # print('hot', temperature)
-
-    elif load == "open" or "short" or "box" or "amb":
-        temperature = amb_load_temp  # this is default if no load is specified
-
-    if load == "amb":
-        temperature = amb_load_temp
-        # print('amb', temperature)
-
-    elif load == "hot":
-        temperature = hot_load_temp
-        # print('hot', temperature)
-
-    elif load == "open" or "short" or "box":
-        temperature = front_end_temp  # this is default if no load is specified
-        # print('default', temperature)
-
-    temperature_deg_C = temperature * un.deg_C
-    temperature_K = temperature_deg_C.to(un.K, equivalencies=un.temperature())
-
-    return temperature_K.mean()
-
-
-# weather log is a big file so lets try to downselect to the days that we need
+    out_path = datadir / "temperature_data.csv"
+    df.to_csv(out_path)
+    return str(out_path)
 
 
 def downselect_weatherlog(
     start_date, end_date, path="/data5/edges/data/2014_February_Boolardy/"
 ):
-    """
-    Filters entries in the weather log text file by date range and saves them to a CSV file.
-
-    """
-    input_file_path = path + "weather2.txt"
-
+    """Filter weather-log entries by date range and save them to a text file."""
+    input_file_path = Path(path) / "weather2.txt"
     output_path = datadir / f"weather_log_{start_date}_to_{end_date}.txt"
     start_datetime = datetime.strptime(start_date, "%Y_%j")
     end_datetime = datetime.strptime(end_date, "%Y_%j")
 
-    with open(input_file_path) as txt_file, open(output_path, "w") as out_file:
-        out_file.write(
-            "Datetime Rack_Temp(K) Ambient_Temp(K) Ambient_Hum(%) Frontend_Temp(K) RCV3_LNA_Temp(K)\n"
-        )
+    header = (
+        "Datetime Rack_Temp(K) Ambient_Temp(K) Ambient_Hum(%) "
+        "Frontend_Temp(K) RCV3_LNA_Temp(K)\n"
+    )
+    with input_file_path.open() as txt_file, output_path.open("w") as out_file:
+        out_file.write(header)
 
         for line in txt_file:
             parts = line.split()
@@ -548,32 +382,31 @@ def downselect_weatherlog(
 
 
 def get_weatherlog_closest_to_time(file_path, input_time):
-    """
-    Retrieve the log entry closest to the given input time.
+    """Retrieve the log entry closest to the given input time.
 
     Parameters
     ----------
-        file_path (str): Path to the weather log file.
-        input_time (str): Input time in the format "%Y:%j:%H:%M:%S".
+    file_path
+        Path to the weather log file.
+    input_time
+        Input time in the format ``%Y:%j:%H:%M:%S``.
 
     Returns
     -------
-        dict: A dictionary containing the closest weather log entry, or None if no entries exist.
+    dict or None
+        Closest weather log entry, or None if no entries exist.
     """
-    from datetime import datetime
-
     input_datetime = datetime.strptime(input_time, "%Y:%j:%H:%M:%S")
     closest_entry = None
     min_time_diff = float("inf")
 
-    with open(file_path) as file:
-        headers = file.readline().strip().split()  # Read headers
+    with Path(file_path).open() as file:
+        headers = file.readline().strip().split()
 
         for line in file:
             parts = line.strip().split()
 
             if len(parts) != len(headers):
-                print(f"Skipping malformed line: {line.strip()}")
                 continue
 
             entry_datetime = datetime.strptime(parts[0], "%Y:%j:%H:%M:%S")
@@ -584,8 +417,6 @@ def get_weatherlog_closest_to_time(file_path, input_time):
                 closest_entry = parts
 
     if closest_entry:
-        # print(f"Closest entry: {closest_entry}")
-        # Construct dictionary from the closest entry
         return {
             headers[i]: float(closest_entry[i]) if i > 1 else closest_entry[i]
             for i in range(len(headers))

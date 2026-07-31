@@ -60,11 +60,14 @@ def get_ydays(
     print_index: bool = False,
     datadir: Path = Path("/data5/edges/data/2014_February_Boolardy/mro/low/"),
 ):
+    """List year-day combinations in a date range that have ACQ data."""
+    from datetime import UTC, timedelta
     from datetime import datetime as dt
-    from datetime import timedelta
 
-    first = dt(year=first_year, month=1, day=1) + timedelta(days=first_day - 1)
-    last = dt(year=last_year, month=1, day=1) + timedelta(days=last_day - 1)
+    first = dt(year=first_year, month=1, day=1, tzinfo=UTC) + timedelta(
+        days=first_day - 1
+    )
+    last = dt(year=last_year, month=1, day=1, tzinfo=UTC) + timedelta(days=last_day - 1)
 
     day = first
     index = 0
@@ -74,11 +77,10 @@ def get_ydays(
         files_to_load = sorted((datadir / str(y)).glob(f"{y}_{d:>03}_*.acq"))
         if files_to_load:
             if print_index:
-                print(
-                    f"{index:03}: {y}-{d:03} [{', '.join(x.name for x in files_to_load)}]"
-                )
+                names = ", ".join(x.name for x in files_to_load)
+                typer.echo(f"{index:03}: {y}-{d:03} [{names}]")
             else:
-                print(f"{y}-{d:03}")
+                typer.echo(f"{y}-{d:03}")
             index += 1
         day += timedelta(days=1)
 

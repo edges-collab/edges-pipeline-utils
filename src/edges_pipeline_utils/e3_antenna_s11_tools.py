@@ -1,8 +1,5 @@
-"""
-Functions for testing Antenna S11 variabilities.
-"""
+"""Functions for testing Antenna S11 variabilities."""
 
-import glob
 from pathlib import Path
 
 import numpy as np
@@ -22,6 +19,7 @@ datadir: Path = Path("/data4/vydula/edges/packages/edges3-data-analysis/data/")
 
 
 def calculate_rms(array, digits=3):
+    """Return the RMS of ``array``, rounded to ``digits``."""
     rms = np.sqrt(np.nanmean(array**2))
     return round(rms, digits)
 
@@ -36,7 +34,8 @@ def _as_mhz_float(x: float | un.Quantity) -> float:
         if not x.unit.is_equivalent(un.MHz):
             raise TypeError(
                 f"Expected a frequency for f_low/f_high (e.g. MHz); got unit {x.unit}. "
-                "Pass a float in MHz, or a single frequency Quantity, not f*u.MHz twice."
+                "Pass a float in MHz, or a single frequency Quantity, "
+                "not f*u.MHz twice."
             )
         return float(x.to(un.MHz).value)
     if hasattr(x, "to_value"):
@@ -47,43 +46,41 @@ def _as_mhz_float(x: float | un.Quantity) -> float:
 def get_ant_s11(
     year, day, f_low=40, f_high=190, raw=False, n_terms=12, return_model=False
 ):
+    """Read and optionally smooth antenna S11 for a given year/day."""
     try:
-        pattern_base = f"{root_dir}/{year}_{day:03d}_*"
-        Tfopen = glob.glob(f"{pattern_base}O.s1p")[0]
-        Tfshort = glob.glob(f"{pattern_base}S.s1p")[0]
-        Tfload = glob.glob(f"{pattern_base}L.s1p")[0]
-        Tfant = glob.glob(f"{pattern_base}ant.s1p")[0]
-    except IndexError:
+        pattern = f"{year}_{day:03d}_*"
+        tf_open = next(root_dir.glob(f"{pattern}O.s1p"))
+        tf_short = next(root_dir.glob(f"{pattern}S.s1p"))
+        tf_load = next(root_dir.glob(f"{pattern}L.s1p"))
+        tf_ant = next(root_dir.glob(f"{pattern}ant.s1p"))
+    except StopIteration:
         # If any file is missing, return None
-        print(f"Missing one or more required files for year {year}, day {day}")
         return None, None, None
 
     try:
         # reads1p1 returns a calibrated ReflectionCoefficient (not a (freq, s11) tuple).
         gamma_ant = reads1p1(
             res=49.930,
-            s11_file_open=Tfopen,
-            s11_file_short=Tfshort,
-            s11_file_load=Tfload,
-            s11_file_ant=Tfant,
+            s11_file_open=str(tf_open),
+            s11_file_short=str(tf_short),
+            s11_file_load=str(tf_load),
+            s11_file_ant=str(tf_ant),
         )
         raw_freq = gamma_ant.freqs
         ea_ant_s11 = gamma_ant.reflection_coefficient
 
     except ValueError:
         # if the files are inconsistent
-        print("Cal files are inconsistent in frequencies")
         return None, None, None
 
     # get antenna temperature from temperature logger
-    file_name = Tfant.split("/")[-1]
-    temperature = utils.extract_temperature(file_name)
+    temperature = utils.extract_temperature(tf_ant.name)
 
     f_low_mhz = _as_mhz_float(f_low)
     f_high_mhz = _as_mhz_float(f_high)
     mask = get_mask(raw_freq, f_low_mhz * un.MHz, f_high_mhz * un.MHz)
 
-    # use 53-105 MHz --> Alan sets wfstart/stop to 54-104 MHz but also hardcodes /pm 1 to it
+    # Alan sets wfstart/stop to 54-104 MHz but also hardcodes +/- 1 MHz
     ea_freq = raw_freq[mask]
 
     ants11_raw = ReflectionCoefficient(
@@ -91,12 +88,8 @@ def get_ant_s11(
         freqs=ea_freq,
     )
 
-    if raw:
-        mod_freq = ea_freq
-    else:
-        mod_freq = (
-            np.arange(f_low_mhz, f_high_mhz, 0.390) * un.MHz
-        )  # B18 resolution is 390 kHz
+    # B18 resolution is 390 kHz
+    mod_freq = ea_freq if raw else np.arange(f_low_mhz, f_high_mhz, 0.390) * un.MHz
 
     ants11 = ants11_raw.smoothed(
         params=S11ModelParams(
@@ -118,19 +111,16 @@ def get_ant_s11(
 
 
 def get_cut_off_freq_range(cut_off=-10, f_low=50, f_high=120, n_terms=16):
+    """Return the frequency range based on an S11 magnitude cut-off in dB."""
     _, ref_freq, ref_ants11 = get_ant_s11(
         year=2023, day=154, f_low=f_low, f_high=f_high, n_terms=n_terms
     )
-    """
-    Returns the frequency range based on S11 cut-off
-    """
 
     s11_dB = 20 * np.log10(np.abs(ref_ants11))
 
-    # this makes all the values close to zero, closest to zero will be the crossing point of the cut-off value
+    # Closest-to-zero values are where S11 crosses the cut-off
     crossings = np.where(np.diff(np.sign(s11_dB - cut_off)))[0]
 
-    # # Find indices of the closest values
     if len(crossings) >= 2:
         first_index = crossings[0]
         last_index = crossings[-1]

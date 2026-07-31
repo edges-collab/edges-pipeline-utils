@@ -33,7 +33,7 @@ def run_notebook(
         if cfgfile.suffix == ".toml":
             params = toml.load(cfgfile)
         elif cfgfile.suffix == ".yaml":
-            with open(cfgfile) as fl:
+            with cfgfile.open() as fl:
                 params = yaml.safe_load(fl)
         else:
             raise ValueError(f"Unkown extension on --toml input: {cfgfile}")
@@ -58,7 +58,7 @@ def run_notebook(
             tp = infer[k]["inferred_type_name"]
             try:
                 new_kw[k] = tps[tp](v)
-            except Exception:
+            except (TypeError, ValueError, KeyError):
                 new_kw[k] = v
         else:
             raise ValueError(f"Unknown parameter {k}")
