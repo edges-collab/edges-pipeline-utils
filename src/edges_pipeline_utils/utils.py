@@ -87,6 +87,9 @@ def print_versions() -> None:
 
 def find_closest_s11date(datadir: str, specyear: int, specday: int) -> str:
     """Find s11 date stem (year_day_run) in datadir closest to specyear, specday."""
+    # Papermill/YAML often inject these as strings
+    specyear = int(specyear)
+    specday = int(specday)
     data_path = Path(datadir)
     if not data_path.exists():
         raise FileNotFoundError(f"Data directory not found: {datadir}")
@@ -116,6 +119,8 @@ def find_closest_s11date(datadir: str, specyear: int, specday: int) -> str:
 
 def find_closest_calkit_stem(data_dir: str, year: int, day: int) -> str | None:
     """Find calkit file stem closest to Antenna S11 date."""
+    year = int(year)
+    day = int(day)
     data_path = Path(data_dir)
     if not data_path.exists():
         return None
